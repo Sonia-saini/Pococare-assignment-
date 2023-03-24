@@ -2,12 +2,13 @@ const express=require("express");
 const cors=require("cors");
 const { connection } = require("./config/db");
 const { userRouter } = require("./Routes/UserRoute");
+const authentication = require("./Middlewares/authentication");
 require("dotenv").config();
 
 let app=express();
 app.use(cors());
 app.use(express.json())
-app.get("/",(req,res)=>{
+app.get("/",authentication,(req,res)=>{
     res.send("welcome pococare")
 })
 app.use("/",userRouter)

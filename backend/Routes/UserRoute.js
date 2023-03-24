@@ -2,12 +2,14 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { Usermodel } = require("../Models/Usermodel");
+const { loginValidator } = require("../Middlewares/loginvalidate");
+const { registerValidator } = require("../Middlewares/Registervalidate");
 require("dotenv").config();
 
 
 const userRouter = express.Router();
 
-userRouter.post("/register", async (req, res) => {
+userRouter.post("/register",registerValidator, async (req, res) => {
   const { name, email, password } = req.body;
 
   try {
@@ -36,25 +38,31 @@ userRouter.post("/register", async (req, res) => {
   }
 }catch (error) {
     console.log("Some Error occurred, unable to Register.");
-    res.send(error);
+    res.status(401).send(error);
   }
 });
 
-userRouter.post("/login", async (req, res) => {
+userRouter.post("/login",loginValidator, async (req, res) => {
   const { email, password } = req.body;
   try {
     const user = await Usermodel.find({ email });
-    const hashed_password = user[0].password;
-    if (user.length > 0) {
-      bcrypt.compare(password, hashed_password, (err, result) => {
-        if (result) {
-          const token = jwt.sign({ userID: user[0]._id }, process.env.key, {
-            expiresIn: "24h",
-          });
-          res.status(201).send({ msg: "Login Successful", token: token,user:user });
-        } else {
-          res.status(400).send("Wrong credentials, please try again.");
-        }
+    const hash_password = user[0].password;
+    if (user && hash_password) {
+      console.log(user,"login id",user[0]._id)
+      var token = jwt.sign(
+        {userID: user[0]._id},
+        process.env.key,
+        { expiresIn: "24h" }
+      );
+      var refreshToken = jwt.sign(
+        {userID: user[0]._id},
+        process.env.REFRESHKEY,
+        { expiresIn: "48h" }
+      );
+      res.status(200).send({
+     msg: "LogIn successfully",
+        token: token,
+        refreshToken: refreshToken,
       });
     }
   } catch (error) {
@@ -62,5 +70,30 @@ userRouter.post("/login", async (req, res) => {
     console.log(error);
   }
 });
-
+userRouter.post("/refresh", async (req, res) => {
+  const { refreshToken } = req.body;
+  try {
+    if (!refreshToken) {
+      return res.status(401).send("unauthorized");
+    }
+    const verification = jwt.verify(refreshToken, process.env.REFRESHKEY);
+    console.log(verification)
+    if (verification){
+      var newToken = jwt.sign(
+        { userID: verification.userID},
+        process.env.key,
+        { expiresIn: "7 days" }
+      );
+    }
+    res.status(200).send({
+    
+      
+      msg: "Token generated successfully",
+      token:newToken,
+    });
+  } catch (error) {
+    res.send("Some Error occurred, unable to refresh token.");
+    console.log(error);
+  }
+});
 module.exports = { userRouter };
